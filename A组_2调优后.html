@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>虚拟产线闭环仿真 V3 · 数控磨床尺寸控制</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font:14px/1.62 "Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    background:#eef2f7;color:#1e293b;-webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:ui-monospace,Consolas,"Cascadia Mono","Courier New",monospace}
+  .wrap{max-width:1340px;margin:0 auto;padding:0 18px 56px}
+
+  /* ---------- 顶部 ---------- */
+  header.top{
+    background:linear-gradient(118deg,#0b2545 0%,#123a63 55%,#1b4f7e 100%);
+    color:#fff;padding:18px 0 20px;margin-bottom:18px;
+    box-shadow:0 3px 16px rgba(11,37,69,.22);
+  }
+  header.top h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.5px}
+  header.top h1 small{
+    font-size:12px;font-weight:500;color:#9fc0df;margin-left:10px;letter-spacing:0;
+  }
+  header.top .sub{margin:5px 0 0;font-size:12.5px;color:#a8c6e2}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+  .chip{
+    font-size:11.5px;padding:2.5px 9px;border-radius:20px;
+    background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);
+    color:#dbe9f7;white-space:nowrap;
+  }
+  .chip b{color:#fff;font-weight:600}
+  .chip.on{background:rgba(250,204,21,.16);border-color:rgba(250,204,21,.45);color:#fde68a}
+
+  /* ---------- 卡片 ---------- */
+  .card{
+    background:#fff;border:1px solid #dbe3ee;border-radius:12px;
+    padding:15px 17px;margin-bottom:15px;
+    box-shadow:0 1px 2px rgba(15,23,42,.05);
+  }
+  .card > h2{
+    margin:0 0 13px;font-size:13.5px;font-weight:700;color:#0b2545;
+    display:flex;align-items:center;gap:8px;
+  }
+  .card > h2::before{
+    content:"";width:3px;height:14px;border-radius:2px;background:#1d6ef5;
+  }
+  .card > h2 .h2note{margin-left:auto;font-size:11.5px;font-weight:400;color:#7c8ba1}
+
+  /* ---------- 控制区 ---------- */
+  .ctrl{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:11px}
+  .fld{display:flex;flex-direction:column;gap:4px}
+  .fld label{font-size:11.5px;font-weight:600;color:#5a6b82;letter-spacing:.2px}
+  .fld label i{font-style:normal;color:#94a3b8;font-weight:400}
+  .fld input,.fld select{
+    width:100%;padding:7px 9px;border:1px solid #cfd9e6;border-radius:8px;
+    font-family:ui-monospace,Consolas,monospace;font-size:14.5px;color:#0f172a;
+    background:#fbfcfe;transition:.15s;
+  }
+  .fld input:focus,.fld select:focus{
+    outline:none;border-color:#1d6ef5;background:#fff;
+    box-shadow:0 0 0 3px rgba(29,110,245,.13);
+  }
+  .btns{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:13px}
+  .btn{
+    border:0;border-radius:9px;padding:9px 17px;font-size:13.5px;font-weight:600;
+    cursor:pointer;transition:.16s;font-family:inherit;white-space:nowrap;
+  }
+  .btn:disabled{opacity:.42;cursor:not-allowed;transform:none !important}
+  .btn-pri{background:#1d6ef5;color:#fff;box-shadow:0 2px 8px rgba(29,110,245,.3)}
+  .btn-pri:not(:disabled):hover{background:#155ad1;transform:translateY(-1px)}
+  .btn-sec{background:#eef3fa;color:#1f3552;border:1px solid #d7e1ee}
+  .btn-sec:not(:disabled):hover{background:#e2ebf7}
+  .btn-warn{background:#fff4d6;color:#8a5b06;border:1px solid #f3d489}
+  .btn-warn:not(:disabled):hover{background:#ffecb3}
+  .hint{font-size:11.5px;color:#8494a8;margin-left:2px}
+
+  /* ---------- 进度 ---------- */
+  .prog{height:6px;border-radius:4px;background:#e6ecf5;overflow:hidden;margin-top:14px}
+  .prog > i{
+    display:block;height:100%;width:0%;border-radius:4px;
+    background:linear-gradient(90deg,#1d6ef5,#3b9bf5);transition:width .22s;
+  }
+  .prog.done > i{background:linear-gradient(90deg,#059669,#34d399)}
+  .prog.fail > i{background:linear-gradient(90deg,#b91c1c,#ef4444)}
+  .progrow{display:flex;justify-content:space-between;font-size:11.5px;color:#7c8ba1;margin-top:5px}
+
+  /* ---------- 成绩 ---------- */
+  #scoreCard{border-color:#c7dcff;background:linear-gradient(180deg,#f7fbff,#fff)}
+  #scoreLine{
+    font-family:ui-monospace,Consolas,monospace;font-size:19px;font-weight:700;
+    color:#0b2545;letter-spacing:.2px;line-height:1.5;min-height:29px;
+    word-break:break-word;
+  }
+  #scoreLine.idle{color:#a3b1c4;font-weight:500;font-size:16px}
+  #scoreLine.ok{color:#047857}
+  #scoreLine.bad{color:#b91c1c}
+  #scoreSub{font-size:12px;color:#6b7c92;margin-top:4px;min-height:18px}
+  .verdict{
+    display:inline-block;font-size:11.5px;font-weight:700;padding:2px 10px;
+    border-radius:20px;margin-left:9px;vertical-align:middle;font-family:inherit;
+  }
+  .v-run{background:#dbeafe;color:#1d4ed8}
+  .v-ok{background:#d1fae5;color:#047857}
+  .v-bad{background:#fee2e2;color:#b91c1c}
+  .v-idle{background:#e5eaf1;color:#64748b}
+
+  /* ---------- 指标格 ---------- */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:9px;margin-top:13px}
+  .stat{background:#f7f9fc;border:1px solid #e3eaf4;border-radius:9px;padding:7px 10px}
+  .stat span{display:block;font-size:11px;color:#7c8ba1;margin-bottom:1px;white-space:nowrap}
+  .stat b{
+    font-family:ui-monospace,Consolas,monospace;font-size:15.5px;font-weight:700;
+    color:#0f172a;line-height:1.25;
+  }
+  .stat b.good{color:#047857}
+  .stat b.warn{color:#b45309}
+  .stat b.bad{color:#b91c1c}
+  .stat b.dim{color:#94a3b8;font-weight:600}
+
+  /* ---------- 图表 ---------- */
+  .chartgrid{display:grid;grid-template-columns:minmax(0,1.62fr) minmax(0,1fr);gap:15px}
+  @media (max-width:1000px){.chartgrid{grid-template-columns:1fr}}
+  .cvbox{position:relative}
+  canvas{display:block;width:100%;height:100%}
+  #cvScatter{height:322px}
+  #cvE{height:146px}
+  #cvCpk{height:146px}
+  .cvtitle{
+    display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
+    font-size:11.5px;color:#7c8ba1;margin:0 0 6px;
+  }
+  .cvtitle b{font-size:12.5px;color:#334155;font-weight:700}
+  .lg{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .lg i{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .trendstack{display:flex;flex-direction:column;gap:9px}
+
+  /* ---------- 日志表 ---------- */
+  .tablewrap{max-height:346px;overflow:auto;border:1px solid #e3eaf4;border-radius:9px}
+  table{width:100%;border-collapse:collapse;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  thead th{
+    position:sticky;top:0;z-index:2;background:#f1f5fa;color:#465a72;
+    font-weight:600;text-align:right;padding:7px 9px;white-space:nowrap;
+    border-bottom:1px solid #dbe3ee;font-family:"Segoe UI","Microsoft YaHei",sans-serif;font-size:11.5px;
+  }
+  thead th:first-child,thead th:last-child{text-align:center}
+  tbody td{padding:5px 9px;text-align:right;border-bottom:1px solid #f0f4f9;white-space:nowrap}
+  tbody td:first-child,tbody td:last-child{text-align:center}
+  tbody tr:last-child td{border-bottom:0}
+  td .tag{
+    font-family:"Segoe UI","Microsoft YaHei",sans-serif;font-size:10.5px;font-weight:600;
+    padding:1px 6px;border-radius:9px;background:#eef2f8;color:#5a6b82;
+  }
+  .tag.t-conv{background:#d1fae5;color:#047857}
+  .tag.t-hold{background:#dbeafe;color:#1d4ed8}
+  .tag.t-guard{background:#fee2e2;color:#b91c1c}
+  .tag.t-step{background:#fef3c7;color:#92400e}
+  .tag.t-clip{background:#ede9fe;color:#6d28d9}
+  tr.r-hold{background:#f5f9ff}
+  tr.r-conv{background:#f0fdf7}
+  tr.r-guard{background:#fff5f5}
+  tr.r-anom td{color:#94a3b8}
+  .neg{color:#b91c1c}
+  .pos{color:#1d4ed8}
+
+  /* ---------- 参数详情 ---------- */
+  details.params{border:1px solid #e3eaf4;border-radius:9px;padding:0 12px;background:#fbfcfe}
+  details.params summary{
+    cursor:pointer;padding:9px 0;font-size:12.5px;font-weight:600;color:#465a72;
+    list-style:none;user-select:none;
+  }
+  details.params summary::-webkit-details-marker{display:none}
+  details.params summary::before{content:"▸ ";color:#94a3b8}
+  details.params[open] summary::before{content:"▾ "}
+  .pgrid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));
+    gap:3px 20px;padding:0 0 12px;font-size:12px;
+  }
+  .pgrid div{display:flex;justify-content:space-between;gap:10px;padding:2.5px 0;border-bottom:1px dotted #e8eef6}
+  .pgrid span{color:#6b7c92}
+  .pgrid code{font-family:ui-monospace,Consolas,monospace;color:#0f172a;font-weight:600}
+  footer{font-size:11.5px;color:#8494a8;text-align:center;padding:4px 0 0;line-height:1.9}
+  kbd{
+    font-family:ui-monospace,Consolas,monospace;font-size:11px;padding:1px 5px;
+    border:1px solid #cfd9e6;border-bottom-width:2px;border-radius:5px;background:#f8fafc;color:#475569;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <h1>虚拟产线闭环仿真 <small>V3 · A 组：磨损快进 · 调优后（死区 0.001 / 增益 1.0）</small></h1>
+    <p class="sub">A 组剧本：刀具磨损 ×1.1 · 药方：死区 0.001 + 增益 1.0 + 决策器自夹护栏 · 种子 8（固定考卷）</p>
+    <div class="chips">
+      <span class="chip">速率限制 <b>±0.006</b>/批</span>
+      <span class="chip">安全护栏 <b>±0.020</b>/步</span>
+      <span class="chip">行程上限 <b>±0.150</b>累计</span>
+      <span class="chip">执行延迟 <b>1</b> 批</span>
+      <span class="chip">窗口 <b>30</b> 件</span>
+      <span class="chip">CPK ≥ <b>1.33</b> 连续 <b>3</b> 批 = 收敛</span>
+      <span class="chip">保持赛 <b>8</b> 批</span>
+      <span class="chip" id="chipScript">剧本：标准产线</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ 控制区 ============ -->
+  <section class="card">
+    <h2>闭环参数 <span class="h2note">改参数会自动重置赛程</span></h2>
+    <div class="ctrl">
+      <div class="fld">
+        <label>死区 <i>(mm)</i></label>
+        <input id="inDz" type="number" value="0.001" step="0.0005" min="0" max="0.05">
+      </div>
+      <div class="fld">
+        <label>增益 <i>(补偿 = −e × 增益)</i></label>
+        <input id="inGain" type="number" value="1.0" step="0.1" min="0" max="5">
+      </div>
+      <div class="fld">
+        <label>随机种子 <i>(考卷编号)</i></label>
+        <input id="inSeed" type="number" value="8" step="1">
+      </div>
+      <div class="fld">
+        <label>运行速度</label>
+        <select id="inSpeed">
+          <option value="750">慢（看细节）</option>
+          <option value="320" selected>中</option>
+          <option value="130">快</option>
+          <option value="35">极快</option>
+        </select>
+      </div>
+    </div>
+    <div class="btns">
+      <button class="btn btn-pri" id="btnRun">▶ 自动运行闭环</button>
+      <button class="btn btn-warn" id="btnPause" disabled>⏸ 暂停</button>
+      <button class="btn btn-sec" id="btnStep">⏭ 单批步进</button>
+      <button class="btn btn-sec" id="btnReset">↺ 重置</button>
+      <span class="hint" id="ctrlHint">就绪：种子 8 · 死区 0.002 · 增益 0.5</span>
+    </div>
+    <div class="prog" id="progBar"><i></i></div>
+    <div class="progrow">
+      <span id="progText">第 0 / 40 批</span>
+      <span id="phaseText">待运行</span>
+    </div>
+  </section>
+
+  <!-- ============ 成绩 ============ -->
+  <section class="card" id="scoreCard">
+    <h2>成绩行 <span class="h2note">口径：收敛批次（越小越好）+ 保持期 CPK 均值（越大越好）+ 全程超差件数（越少越好）</span></h2>
+    <div id="scoreLine" class="idle">尚未开跑 —— 点「自动运行闭环」</div>
+    <div id="scoreSub"></div>
+    <div class="stats">
+      <div class="stat"><span>当前批</span><b id="sBatch" class="dim">0</b></div>
+      <div class="stat"><span>均值偏移 e</span><b id="sE" class="dim">—</b></div>
+      <div class="stat"><span>标准差 σ</span><b id="sSigma" class="dim">—</b></div>
+      <div class="stat"><span>CPK</span><b id="sCpk" class="dim">—</b></div>
+      <div class="stat"><span>窗口超差</span><b id="sOot" class="dim">—</b></div>
+      <div class="stat"><span>机床补偿量</span><b id="sComp" class="dim">—</b></div>
+      <div class="stat"><span>待生效</span><b id="sPending" class="dim">—</b></div>
+      <div class="stat"><span>全程超差</span><b id="sTotOot" class="dim">—</b></div>
+      <div class="stat"><span>护栏拦截</span><b id="sGuard" class="dim">—</b></div>
+      <div class="stat"><span>调整次数</span><b id="sAdj" class="dim">—</b></div>
+    </div>
+  </section>
+
+  <!-- ============ 图表 ============ -->
+  <section class="card">
+    <h2>尺寸散点图与趋势 <span class="h2note">公差带内为合格区；红点为超差件</span></h2>
+    <div class="chartgrid">
+      <div>
+        <p class="cvtitle">
+          <b>逐件尺寸</b>
+          <span class="lg"><i style="background:#16a34a;opacity:.22"></i>公差带 ±0.020</span>
+          <span class="lg"><i style="background:#dc2626"></i>超差件</span>
+          <span class="lg"><i style="background:#1d6ef5"></i>合格件</span>
+          <span class="lg"><i style="background:#7c3aed"></i>30 件滚动均值</span>
+        </p>
+        <div class="cvbox"><canvas id="cvScatter"></canvas></div>
+      </div>
+      <div class="trendstack">
+        <div>
+          <p class="cvtitle"><b>均值偏移 e</b><span class="lg"><i style="background:#1d6ef5"></i>e</span><span class="lg"><i style="background:#64748b;opacity:.25"></i>死区</span><span class="lg"><i style="background:#16a34a"></i>收敛点</span></p>
+          <div class="cvbox"><canvas id="cvE"></canvas></div>
+        </div>
+        <div>
+          <p class="cvtitle"><b>CPK</b><span class="lg"><i style="background:#f59e0b"></i>CPK</span><span class="lg"><i style="background:#16a34a"></i>门槛 1.33</span><span class="lg"><i style="background:#dbeafe"></i>保持赛</span></p>
+          <div class="cvbox"><canvas id="cvCpk"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 日志 ============ -->
+  <section class="card">
+    <h2>逐批日志 <span class="h2note" id="logNote">每批：先生效上批补偿 → 出 10 件 → 用最近 30 件统计</span></h2>
+    <div class="tablewrap" id="tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>批次</th><th>均值偏移 e</th><th>σ</th><th>CPK</th>
+            <th>窗口超差</th><th>补偿量</th><th>本批决策</th><th>备注</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="8" style="text-align:center;color:#a3b1c4;padding:22px 0;font-family:inherit">暂无数据</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ 参数详情 ============ -->
+  <section class="card">
+    <h2>移植口径核对表 <span class="h2note">与 Python 图纸逐项一致（只读）</span></h2>
+    <details class="params">
+      <summary>展开／收起 产线物理、执行机构与判定规则的全部常量</summary>
+      <div class="pgrid" id="pgrid"></div>
+    </details>
+  </section>
+
+  <footer>
+    A 组调优后：种子 8 + 死区 0.001 + 增益 1.0 → 第 14 批收敛、保持期 CPK 均值 ≈1.63、全程超差 0 件
+    （同种子基线为第 22 批 / 1.24 / 0 件 —— 快 8 批，保持期 CPK 高 0.39）。<br>
+    本页随机数发生器与 Python <code>random.Random</code>（MT19937）逐位一致，
+    因此同一组参数得到与 Python 版完全相同的数字序列。
+  </footer>
+</div>
+
+<!-- ============================================================
+     SIM-CORE-BEGIN
+     产线物理 + 闭环策略：严格对照 line_simulator.py / agent_loop.py 移植
+     ============================================================ -->
+<script id="sim-core">
+"use strict";
+
+/* ================================================================
+   一、Python 兼容随机数发生器
+   ----------------------------------------------------------------
+   为了与 Python 版得到"同一张考卷"，这里完整实现了 CPython
+   random.Random 的 MT19937 + init_by_array 播种，以及
+   random()/uniform()/gauss() 三个方法的位级行为：
+
+     random()  = (a*2^-27 + b) * 2^-26          a,b 为两次 genrand_int32
+     uniform(a,b) = a + (b-a) * random()
+     gauss(mu,σ)  = 极坐标法（cos/sin 各取一个 z，第二个缓存到下一次）
+
+   所以 wear/temp/噪声 的取数顺序与个数都与 Python 完全相同。
+   ================================================================ */
+function PyRandom(seed) {
+  var N = 624, M = 397;
+  var UPPER = 0x80000000, LOWER = 0x7fffffff;
+  var MAG01 = [0, 0x9908b0df];
+  var mt = new Uint32Array(N);
+  var mti = N + 1;
+  var gaussNext = null;                      // 对应 Python 的 self.gauss_next
+
+  function genrandInt32() {
+    var y, kk;
+    if (mti >= N) {
+      if (mti > N) initGenrand(5489);        // 理论上不会走到（已 init_by_array）
+      for (kk = 0; kk < N - M; kk++) {
+        y = (mt[kk] & UPPER) | (mt[kk + 1] & LOWER);
+        mt[kk] = mt[kk + M] ^ (y >>> 1) ^ MAG01[y & 1];
+      }
+      for (; kk < N - 1; kk++) {
+        y = (mt[kk] & UPPER) | (mt[kk + 1] & LOWER);
+        mt[kk] = mt[kk + (M - N)] ^ (y >>> 1) ^ MAG01[y & 1];
+      }
+      y = (mt[N - 1] & UPPER) | (mt[0] & LOWER);
+      mt[N - 1] = mt[M - 1] ^ (y >>> 1) ^ MAG01[y & 1];
+      mti = 0;
+    }
+    y = mt[mti++];
+    y ^= y >>> 11;
+    y ^= (y << 7) & 0x9d2c5680;
+    y ^= (y << 15) & 0xefc60000;
+    y ^= y >>> 18;
+    return y >>> 0;
+  }
+
+  // init_genrand(19650218) 起始，再 init_by_array 混入种子（与 CPython 一致）
+  function initGenrand(s) {
+    mt[0] = s >>> 0;
+    for (mti = 1; mti < N; mti++) {
+      var prev = mt[mti - 1] ^ (mt[mti - 1] >>> 30);
+      mt[mti] = ((Math.imul(prev >>> 16, 1812433253) << 16) +
+                 Math.imul(prev & 0xffff, 1812433253) + mti) >>> 0;
+    }
+  }
+
+  function initByArray(key) {
+    var i = 1, j = 0, k, m;
+    var keyLen = key.length;
+    initGenrand(19650218);
+    k = N > keyLen ? N : keyLen;
+    for (; k > 0; k--) {
+      mt[i] = ((mt[i] ^ Math.imul(mt[i - 1] ^ (mt[i - 1] >>> 30), 1664525)) +
+               key[j] + j) >>> 0;
+      i++; j++;
+      if (i >= N) { mt[0] = mt[N - 1]; i = 1; }
+      if (j >= keyLen) j = 0;
+    }
+    for (k = N - 1; k > 0; k--) {
+      mt[i] = ((mt[i] ^ Math.imul(mt[i - 1] ^ (mt[i - 1] >>> 30), 1566083941)) - i) >>> 0;
+      i++;
+      if (i >= N) { mt[0] = mt[N - 1]; i = 1; }
+    }
+    mt[0] = 0x80000000;
+    mti = N;
+  }
+
+  // CPython random_seed：取 |seed| 的 32 位小端字串作为 key（seed=0 → [0]）
+  (function seedInt(n) {
+    var s = Math.trunc(Number(n));
+    if (!isFinite(s)) s = 0;
+    s = Math.abs(s);
+    var key = [];
+    if (s === 0) {
+      key = [0];
+    } else {
+      while (s > 0) { key.push(s % 4294967296); s = Math.floor(s / 4294967296); }
+    }
+    initByArray(key);
+  })(seed);
+
+  this.random = function () {
+    var a = genrandInt32() >>> 5, b = genrandInt32() >>> 6;
+    return (a * 67108864.0 + b) * (1.0 / 9007199254740992.0);
+  };
+  // random.uniform(a, b) = a + (b-a)*random()
+  this.uniform = function (a, b) { return a + (b - a) * this.random(); };
+  // random.gauss(mu, sigma)：极坐标法，第二个 z 缓存到下次调用
+  this.gauss = function (mu, sigma) {
+    var z = gaussNext;
+    gaussNext = null;
+    if (z === null) {
+      var x2pi = this.random() * 2 * Math.PI;
+      var g2rad = Math.sqrt(-2.0 * Math.log(1.0 - this.random()));
+      z = Math.cos(x2pi) * g2rad;
+      gaussNext = Math.sin(x2pi) * g2rad;
+    }
+    return mu + z * sigma;
+  };
+}
+
+/* ================================================================
+   二、图纸常量（对应 line_simulator.py 顶部，档案卡改这里）
+   ================================================================ */
+var PARAMS = {
+  TARGET: 20.000,                        // 目标尺寸 (mm)
+  TOL: 0.020,                            // 公差半宽 (mm) → 合格区间 [19.980, 20.020]
+  BATCH_SIZE: 10,                        // 每批件数
+  MAX_BATCHES: 40,                       // 赛程上限（批）
+
+  NOISE_SIGMA: 0.0035,                   // 测量噪声标准差 (mm)   <- B 组档案卡改此行
+  WEAR_PER_PART: [0.00011, 0.00044],       // 每件刀具磨损均匀分布 (mm)  <- A 组档案卡改此行
+  TEMP_PER_PART: [-0.00005, 0.00015],    // 每件温度漂移均匀分布 (mm)
+  INITIAL_WEAR: 0.012,                   // 开线时刀具已有磨损 (mm)
+  STEP_SHIFT_BATCH: null,                // 第 N 批开始换刀阶跃；null = 不启用 <- C 组档案卡改此行
+  STEP_SHIFT_MM: 0.006,                  // 换刀阶跃偏移量 (mm)
+
+  RATE_LIMIT: 0.006,                     // 速率限制：单步补偿执行上限 (mm/批)
+  GUARDRAIL: 0.020,                      // 安全护栏：策略输出超过此值被拦截
+  COMP_CAP: 0.150,                       // 累计补偿行程上限 (mm)
+  ACT_DELAY: 1,                          // 执行延迟：补偿决策多少批后生效
+
+  STATS_WINDOW: 30,                      // CPK 统计窗口（最近 N 件）
+  CPK_TARGET: 1.33,                      // 收敛判定阈值
+  CONSEC_PASS: 3,                        // 需连续达标的批数
+  HOLD_BATCHES: 8                        // 保持赛批数
+};
+
+/* Python round(x, n) 的近似：以二进制真值四舍五入，避免 x*1000 的二次误差 */
+function pyround(x, n) {
+  if (!isFinite(x)) return x;
+  return Number(x.toFixed(n));
+}
+function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+/* ================================================================
+   三、产线仿真器（对应 LineSimulator）
+   ================================================================ */
+function LineSimulator(seed) {
+  var P = PARAMS;
+  this.rng = new PyRandom(seed === undefined ? 8 : seed);
+  this.wear = P.INITIAL_WEAR;
+  this.temp = 0.0;
+  this.compensation = 0.0;   // 机床当前补偿量
+  this.pending = 0.0;        // 已决策但尚未生效的补偿（执行延迟）
+  this.measurements = [];    // 全部测量值
+  this.batchLog = [];        // 每批统计记录
+  this.partIndex = 0;
+  this.batchIndex = 0;
+  this.adjustCount = 0;      // 实际生效的调整次数
+  this.guardrailHits = 0;    // 护栏拦截次数
+}
+
+LineSimulator.prototype.trueMean = function () {
+  var P = PARAMS;
+  return P.TARGET + this.wear + this.temp + this.compensation;
+};
+
+/* 加工一件：先累加扰动，再得到带噪声的测量值 */
+LineSimulator.prototype.makePart = function () {
+  var P = PARAMS;
+  this.partIndex += 1;
+  this.wear += this.rng.uniform(P.WEAR_PER_PART[0], P.WEAR_PER_PART[1]);
+  this.temp += this.rng.uniform(P.TEMP_PER_PART[0], P.TEMP_PER_PART[1]);
+  if (P.STEP_SHIFT_BATCH !== null &&
+      this.partIndex === (P.STEP_SHIFT_BATCH - 1) * P.BATCH_SIZE + 1) {
+    this.wear += P.STEP_SHIFT_MM;                 // 换刀后装夹偏移：均值阶跃
+  }
+  return this.trueMean() + this.rng.gauss(0, P.NOISE_SIGMA);
+};
+
+/* 最近 30 件：均值偏移 e、标准差 σ、CPK、窗口超差件数 */
+LineSimulator.prototype.stats = function () {
+  var P = PARAMS;
+  var m = this.measurements;
+  var w = m.slice(Math.max(0, m.length - P.STATS_WINDOW));
+  var n = w.length;
+  var sum = 0, i;
+  for (i = 0; i < n; i++) sum += w[i];
+  var mean = sum / n;
+  var e = mean - P.TARGET;
+  var varSum = 0;
+  for (i = 0; i < n; i++) { var d = w[i] - mean; varSum += d * d; }
+  var variance = n > 1 ? varSum / (n - 1) : 0.0;     // 样本方差，分母 n-1
+  var sigma = Math.sqrt(variance);
+  var cpk = sigma > 0 ? (P.TOL - Math.abs(e)) / (3 * sigma) : Infinity;
+  var oot = 0;
+  for (i = 0; i < n; i++) if (Math.abs(w[i] - P.TARGET) > P.TOL) oot++;
+  return { e: e, sigma: sigma, cpk: cpk, oot: oot, n: n };
+};
+
+/* 执行机构：护栏立即审查 → 速率限制截断 → 入延迟队列
+   返回 "queued"（下批生效）或 "guardrail"（整条作废、转人工） */
+LineSimulator.prototype.applyCompensation = function (step) {
+  var P = PARAMS;
+  if (Math.abs(step) > P.GUARDRAIL) {
+    this.guardrailHits += 1;
+    return "guardrail";
+  }
+  this.pending = clamp(step, -P.RATE_LIMIT, P.RATE_LIMIT);
+  return "queued";
+};
+
+/* 加工一批：先生效上批补偿（执行延迟），再出件，再统计 */
+LineSimulator.prototype.runBatch = function () {
+  var P = PARAMS, i;
+  this.batchIndex += 1;
+  if (Math.abs(this.pending) > 1e-12) {
+    this.compensation = clamp(this.compensation + this.pending, -P.COMP_CAP, P.COMP_CAP);
+    this.adjustCount += 1;
+    this.pending = 0.0;
+  }
+  for (i = 0; i < P.BATCH_SIZE; i++) {
+    this.measurements.push(this.makePart());
+  }
+  var s = this.stats();
+  var rec = {
+    batch: this.batchIndex,
+    mean_err: pyround(s.e, 5),
+    sigma: pyround(s.sigma, 5),
+    cpk: pyround(s.cpk, 3),
+    oot: s.oot,
+    compensation: pyround(this.compensation, 5),
+    windowN: s.n
+  };
+  this.batchLog.push(rec);
+  return rec;
+};
+
+/* 最近 3 批 CPK 是否连续达标（注意：比较的是 round 到 3 位后的值，与 Python 一致） */
+LineSimulator.prototype.isConverged = function () {
+  var P = PARAMS;
+  var log = this.batchLog;
+  if (log.length < P.CONSEC_PASS) return false;
+  if (P.STEP_SHIFT_BATCH !== null) {
+    var minBatch = P.STEP_SHIFT_BATCH + Math.floor(P.STATS_WINDOW / P.BATCH_SIZE) - 1;
+    if (this.batchIndex < minBatch) return false;
+  }
+  for (var i = log.length - P.CONSEC_PASS; i < log.length; i++) {
+    if (!(log[i].cpk >= P.CPK_TARGET)) return false;
+  }
+  return true;
+};
+
+/* 全程累计超差件数（比的是全部测量值，不只是窗口） */
+LineSimulator.prototype.totalOot = function () {
+  var P = PARAMS, m = this.measurements, c = 0;
+  for (var i = 0; i < m.length; i++) if (Math.abs(m[i] - P.TARGET) > P.TOL) c++;
+  return c;
+};
+
+/* ================================================================
+   四、闭环主循环（对应 agent_loop.py 的 run_closed_loop）
+   逐批推进，供页面按钮按批驱动
+   ================================================================ */
+function LoopRun(dz, gain, seed) {
+  var P = PARAMS;
+  this.dz = dz;
+  this.gain = gain;
+  this.seed = seed;
+  this.sim = new LineSimulator(seed);
+  this.convBatch = null;      // 收敛批次
+  this.holdCpk = [];          // 保持期每批 CPK
+  this.holdTruncated = false; // 保持赛是否被 40 批上限截断
+  this.finished = false;
+}
+
+/* 策略本体：|e| < 死区 → 不动；否则补偿 −e × 增益 */
+LoopRun.prototype.decide = function (e) {
+  if (Math.abs(e) < this.dz) return 0.0;
+  var step = -e * this.gain;
+  // 自夹：请求先夹到速率上限。执行结果与原来完全相同（机床本来就会截到 ±0.006），
+  // 但请求永远够不到 ±0.020 的护栏线，不会出现"整条作废、本批一步不动"。
+  return clamp(step, -PARAMS.RATE_LIMIT, PARAMS.RATE_LIMIT);
+};
+
+/* 推进一步（= Python 循环体的一轮）。返回 null 表示已结束 */
+LoopRun.prototype.step = function () {
+  var P = PARAMS;
+  if (this.finished) return null;
+  if (this.sim.batchIndex >= P.MAX_BATCHES) { this.finish(); return null; }
+
+  var sim = this.sim;
+  var rec = sim.runBatch();
+  var step = this.decide(rec.mean_err);
+  var status = sim.applyCompensation(step);
+  rec.step = pyround(step, 5);
+  rec.decision = status;
+  rec.pending = pyround(sim.pending, 5);
+  rec.clipped = (status === "queued" && Math.abs(step) > P.RATE_LIMIT + 1e-15);
+  rec.adjustCount = sim.adjustCount;
+  rec.totalOot = sim.totalOot();
+  rec.phase = this.convBatch === null ? "run" : "hold";
+
+  if (this.convBatch === null && sim.isConverged()) {
+    this.convBatch = sim.batchIndex;
+    rec.converged = true;
+    rec.phase = "conv";
+  } else if (this.convBatch !== null) {
+    this.holdCpk.push(rec.cpk);
+    if (this.holdCpk.length >= P.HOLD_BATCHES) this.finish();
+  }
+
+  if (!this.finished && sim.batchIndex >= P.MAX_BATCHES) {
+    if (this.convBatch !== null && this.holdCpk.length < P.HOLD_BATCHES) {
+      this.holdTruncated = true;
+    }
+    this.finish();
+  }
+  return rec;
+};
+
+LoopRun.prototype.finish = function () {
+  this.finished = true;
+  var P = PARAMS;
+  var sum = 0, i;
+  for (i = 0; i < this.holdCpk.length; i++) sum += this.holdCpk[i];
+  this.holdMean = this.holdCpk.length ? sum / this.holdCpk.length : 0.0;
+  this.totalOotFinal = this.sim.totalOot();
+  // 与 Python 一致：收敛那批不计入保持期
+  this.ok = this.convBatch !== null;
+};
+
+/* 一次性跑完（无需动画时用；行为等价于一直点"单批步进"） */
+LoopRun.prototype.runAll = function () {
+  var guard = 0;
+  while (!this.finished && guard++ < PARAMS.MAX_BATCHES + 2) {
+    if (this.step() === null) break;
+  }
+  if (!this.finished) this.finish();
+  return this;
+};
+/* ==== SIM-CORE-END ==== */
+</script>
+
+<!-- ============================================================
+     UI 层：渲染、图表、交互
+     ============================================================ -->
+<script>
+"use strict";
+(function () {
+  var P = PARAMS;
+  var $ = function (id) { return document.getElementById(id); };
+  var COL = {
+    ink: "#0f172a", sub: "#64748b", grid: "#e8eef6", axis: "#c3cfdd",
+    blue: "#1d6ef5", green: "#16a34a", red: "#dc2626", amber: "#f59e0b",
+    violet: "#7c3aed", slate: "#334155"
+  };
+
+  var S = {
+    run: null,          // LoopRun
+    recs: [],           // 已渲染的记录
+    timer: null,
+    running: false,
+    dz: 0.002,
+    gain: 0.5,
+    seed: 8,
+    speed: 320
+  };
+
+  /* ---------------- 数字格式 ---------------- */
+  function fx(v, n) {
+    if (!isFinite(v)) return "∞";
+    return v.toFixed(n);
+  }
+  function fe(v, n) {                         // 带符号
+    if (!isFinite(v)) return "∞";
+    return (v >= 0 ? "+" : "") + v.toFixed(n === undefined ? 4 : n);
+  }
+
+  /* ---------------- 画布适配（含 HiDPI） ---------------- */
+  function fitCanvas(cv) {
+    var dpr = window.devicePixelRatio || 1;
+    var w = cv.clientWidth || 600;
+    var h = cv.clientHeight || 240;
+    var W = Math.round(w * dpr), H = Math.round(h * dpr);
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    var ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  /* ---------------- 散点图 ---------------- */
+  var elScatter = $("cvScatter");
+  function drawScatter() {
+    var c = fitCanvas(elScatter), ctx = c.ctx, w = c.w, h = c.h;
+    var pad = { l: 62, r: 14, t: 12, b: 26 };
+    var plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    var meas = S.run ? S.run.sim.measurements : [];
+
+    // --- y 轴范围：数据 ∪ 公差带，最小跨度 0.05 ---
+    var lo = P.TARGET - P.TOL, hi = P.TARGET + P.TOL, i, v;
+    for (i = 0; i < meas.length; i++) {
+      v = meas[i];
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    var span = hi - lo, MINSPAN = 0.05;
+    if (span < MINSPAN) {
+      var mid = (hi + lo) / 2; lo = mid - MINSPAN / 2; hi = mid + MINSPAN / 2;
+    } else {
+      var padY = span * 0.10; lo -= padY; hi += padY;
+    }
+    span = hi - lo;
+    var MAXN = P.MAX_BATCHES * P.BATCH_SIZE;
+    var X = function (idx) { return pad.l + (idx / (MAXN - 1)) * plotW; };
+    var Y = function (val) { return pad.t + (hi - val) / span * plotH; };
+
+    // --- 公差带 ---
+    ctx.fillStyle = "rgba(22,163,74,.10)";
+    ctx.fillRect(pad.l, Y(P.TARGET + P.TOL), plotW, Y(P.TARGET - P.TOL) - Y(P.TARGET + P.TOL));
+
+    // --- 横向网格 + y 刻度 ---
+    ctx.font = "11px ui-monospace,Consolas,monospace";
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    var ticks = 5, ty;
+    for (i = 0; i <= ticks; i++) {
+      ty = lo + (span * i / ticks);
+      var yp = Y(ty);
+      ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad.l, yp); ctx.lineTo(w - pad.r, yp); ctx.stroke();
+      ctx.fillStyle = "#8a9bb0";
+      ctx.fillText(ty.toFixed(3), pad.l - 7, yp);
+    }
+
+    // --- x 轴（批次刻度）---
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (i = 0; i <= P.MAX_BATCHES; i += 10) {
+      var xp = X(Math.max(0, i * P.BATCH_SIZE - (i === 0 ? 0 : 1)));
+      if (i === 0) xp = pad.l;
+      ctx.strokeStyle = COL.grid;
+      ctx.beginPath(); ctx.moveTo(xp, pad.t); ctx.lineTo(xp, pad.t + plotH); ctx.stroke();
+      ctx.fillStyle = "#8a9bb0";
+      ctx.fillText(String(i), xp, pad.t + plotH + 7);
+    }
+    ctx.fillStyle = "#8a9bb0"; ctx.textAlign = "right";
+    ctx.fillText("批次", w - pad.r, pad.t + plotH + 7);
+
+    // --- 上下限 / 目标线 ---
+    ctx.setLineDash([5, 4]); ctx.lineWidth = 1.3;
+    ctx.strokeStyle = "rgba(220,38,38,.85)";
+    ctx.beginPath(); ctx.moveTo(pad.l, Y(P.TARGET + P.TOL)); ctx.lineTo(w - pad.r, Y(P.TARGET + P.TOL)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad.l, Y(P.TARGET - P.TOL)); ctx.lineTo(w - pad.r, Y(P.TARGET - P.TOL)); ctx.stroke();
+    ctx.strokeStyle = "rgba(71,85,105,.55)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.l, Y(P.TARGET)); ctx.lineTo(w - pad.r, Y(P.TARGET)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(185,28,28,.9)"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    ctx.font = "10.5px ui-monospace,Consolas,monospace";
+    ctx.fillText("USL " + (P.TARGET + P.TOL).toFixed(3), pad.l + 4, Y(P.TARGET + P.TOL) - 2);
+    ctx.textBaseline = "top";
+    ctx.fillText("LSL " + (P.TARGET - P.TOL).toFixed(3), pad.l + 4, Y(P.TARGET - P.TOL) + 2);
+    ctx.fillStyle = "rgba(71,85,105,.75)"; ctx.textBaseline = "bottom";
+    ctx.fillText("目标 " + P.TARGET.toFixed(3), pad.l + 4, Y(P.TARGET) - 2);
+
+    // --- 30 件滚动均值（看清漂移趋势）---
+    if (meas.length > 0) {
+      ctx.strokeStyle = "rgba(124,58,237,.85)"; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      var started = false;
+      for (i = 0; i < meas.length; i++) {
+        var s0 = Math.max(0, i - (P.STATS_WINDOW - 1));
+        var sum = 0, cnt = 0;
+        for (var j = s0; j <= i; j++) { sum += meas[j]; cnt++; }
+        var mv = sum / cnt;
+        if (cnt < 3) continue;                  // 前几件均值无意义，跳过
+        var px = X(i), py = Y(mv);
+        if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    // --- 散点（超差件最后画，压在最上层）---
+    var lim = P.TOL;
+    ctx.fillStyle = "rgba(29,110,245,.55)";
+    for (i = 0; i < meas.length; i++) {
+      if (Math.abs(meas[i] - P.TARGET) > lim) continue;
+      ctx.beginPath(); ctx.arc(X(i), Y(meas[i]), 2.1, 0, 6.2832); ctx.fill();
+    }
+    for (i = 0; i < meas.length; i++) {
+      if (Math.abs(meas[i] - P.TARGET) <= lim) continue;
+      ctx.beginPath(); ctx.arc(X(i), Y(meas[i]), 3.4, 0, 6.2832);
+      ctx.fillStyle = COL.red; ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    // --- 阶跃标记（C 组剧本）---
+    if (P.STEP_SHIFT_BATCH !== null) {
+      var sx = X((P.STEP_SHIFT_BATCH - 1) * P.BATCH_SIZE);
+      ctx.strokeStyle = "rgba(245,158,11,.9)"; ctx.lineWidth = 1.6; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(sx, pad.t); ctx.lineTo(sx, pad.t + plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(180,83,9,.95)"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.font = "10.5px ui-monospace,Consolas,monospace";
+      ctx.fillText("换刀 +" + P.STEP_SHIFT_MM.toFixed(3), sx + 4, pad.t + 2);
+    }
+
+    // --- 边框 ---
+    ctx.strokeStyle = COL.axis; ctx.lineWidth = 1;
+    ctx.strokeRect(pad.l, pad.t, plotW, plotH);
+  }
+
+  /* ---------------- 折线图通用框架 ---------------- */
+  function drawTrend(cv, opt) {
+    var c = fitCanvas(cv), ctx = c.ctx, w = c.w, h = c.h;
+    var pad = { l: 50, r: 12, t: 10, b: 20 };
+    var plotW = w - pad.l - pad.r, plotH = h - pad.t - pad.b;
+    var n = P.MAX_BATCHES;
+    var X = function (b) { return pad.l + ((b - 1) / Math.max(1, n - 1)) * plotW; };
+    var Y = function (v) { return pad.t + (opt.hi - v) / (opt.hi - opt.lo) * plotH; };
+
+    // 背景：保持赛区域
+    if (opt.holdFrom) {
+      ctx.fillStyle = "rgba(219,234,254,.55)";
+      ctx.fillRect(X(opt.holdFrom), pad.t, Math.max(0, w - pad.r - X(opt.holdFrom)), plotH);
+    }
+    // 把 y 值转成"夹在绘图区内"的矩形，避免超出范围时画反
+    function bandRect(yA, yB) {
+      var t0 = Math.min(yA, yB), t1 = Math.max(yA, yB);
+      var top = Math.max(pad.t, Math.min(pad.t + plotH, t0));
+      var bot = Math.max(pad.t, Math.min(pad.t + plotH, t1));
+      if (bot - top < 0.5) return null;
+      return [pad.l, top, plotW, bot - top];
+    }
+    // 背景：危险带（超出 ±TOL 的均值偏移区）
+    if (opt.bandHigh !== undefined) {
+      ctx.fillStyle = "rgba(220,38,38,.07)";
+      var rHi = bandRect(Y(opt.bandHigh), pad.t);
+      var rLo = bandRect(Y(opt.bandLow), pad.t + plotH);
+      if (rHi) ctx.fillRect(rHi[0], rHi[1], rHi[2], rHi[3]);
+      if (rLo) ctx.fillRect(rLo[0], rLo[1], rLo[2], rLo[3]);
+    }
+    // 背景：死区 / 中性带
+    if (opt.zone !== undefined) {
+      ctx.fillStyle = "rgba(100,116,139,.13)";
+      var rZ = bandRect(Y(opt.zone), Y(-opt.zone));
+      if (rZ) ctx.fillRect(rZ[0], rZ[1], rZ[2], rZ[3]);
+    }
+
+    // 网格 + y 刻度
+    ctx.font = "10.5px ui-monospace,Consolas,monospace";
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (var t = 0; t <= 4; t++) {
+      var vv = opt.lo + (opt.hi - opt.lo) * t / 4;
+      var yy = Y(vv);
+      ctx.strokeStyle = COL.grid; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(w - pad.r, yy); ctx.stroke();
+      ctx.fillStyle = "#8a9bb0";
+      ctx.fillText(opt.fmt(vv), pad.l - 6, yy);
+    }
+    // x 刻度
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    [1, 10, 20, 30, 40].forEach(function (b) {
+      if (b > n) return;
+      ctx.fillStyle = "#8a9bb0";
+      ctx.fillText(String(b), X(b), pad.t + plotH + 4);
+    });
+
+    // 阈值线
+    if (opt.thresh !== undefined) {
+      ctx.strokeStyle = "rgba(22,163,74,.9)"; ctx.lineWidth = 1.3; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(pad.l, Y(opt.thresh)); ctx.lineTo(w - pad.r, Y(opt.thresh)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(4,120,87,.95)"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+      ctx.fillText(opt.threshLabel || String(opt.thresh), pad.l + 4, Y(opt.thresh) - 2);
+    }
+    if (opt.zeroLine) {
+      ctx.strokeStyle = "rgba(71,85,105,.45)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(pad.l, Y(0)); ctx.lineTo(w - pad.r, Y(0)); ctx.stroke();
+    }
+
+    // 数据线
+    var pts = opt.points;
+    if (pts.length) {
+      ctx.strokeStyle = opt.color; ctx.lineWidth = 1.8; ctx.lineJoin = "round";
+      ctx.beginPath();
+      for (var i = 0; i < pts.length; i++) {
+        var px = X(pts[i].b), py = Y(pts[i].v);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      for (i = 0; i < pts.length; i++) {
+        var bad = opt.badIf ? opt.badIf(pts[i]) : false;
+        ctx.beginPath();
+        ctx.arc(X(pts[i].b), Y(pts[i].v), bad ? 3 : 2.3, 0, 6.2832);
+        ctx.fillStyle = bad ? COL.red : opt.color; ctx.fill();
+      }
+    }
+
+    // 收敛竖线
+    if (opt.convBatch) {
+      var cx = X(opt.convBatch);
+      ctx.strokeStyle = "rgba(22,163,74,.9)"; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(cx, pad.t); ctx.lineTo(cx, pad.t + plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "rgba(4,120,87,.95)"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.fillText("收敛 #" + opt.convBatch, cx + 3, pad.t + 1);
+    }
+
+    ctx.strokeStyle = COL.axis; ctx.lineWidth = 1;
+    ctx.strokeRect(pad.l, pad.t, plotW, plotH);
+  }
+
+  function drawTrends() {
+    var recs = S.recs;
+    var conv = S.run ? S.run.convBatch : null;
+    var holdFrom = conv ? conv + 0.5 : null;
+
+    // e 轨迹：以 0 为中心对称，含 ±tol 与死区
+    var maxAbs = P.TOL * 0.8;
+    recs.forEach(function (r) { maxAbs = Math.max(maxAbs, Math.abs(r.mean_err)); });
+    var lim = maxAbs * 1.18;
+    drawTrend($("cvE"), {
+      lo: -lim, hi: lim,
+      points: recs.map(function (r) { return { b: r.batch, v: r.mean_err }; }),
+      color: COL.blue,
+      zeroLine: true,
+      zone: S.dz,
+      thresh: undefined,
+      bandHigh: P.TOL, bandLow: -P.TOL,
+      fmt: function (v) { return v.toFixed(3); },
+      convBatch: conv,
+      holdFrom: holdFrom,
+      badIf: function (pt) { return Math.abs(pt.v) > P.TOL; }
+    });
+
+    // CPK 轨迹
+    var maxCpk = P.CPK_TARGET * 1.3;
+    recs.forEach(function (r) { if (isFinite(r.cpk)) maxCpk = Math.max(maxCpk, r.cpk); });
+    drawTrend($("cvCpk"), {
+      lo: 0, hi: Math.max(maxCpk * 1.12, 1.6),
+      points: recs.map(function (r) { return { b: r.batch, v: Math.max(0, Math.min(r.cpk, 99)) }; }),
+      color: COL.amber,
+      thresh: P.CPK_TARGET,
+      threshLabel: "1.33 判决线",
+      fmt: function (v) { return v.toFixed(2); },
+      convBatch: conv,
+      holdFrom: holdFrom,
+      badIf: function (pt) { return pt.v < P.CPK_TARGET; }
+    });
+  }
+
+  /* ---------------- 表格 ---------------- */
+  var tbody = $("tbody");
+  function cell(tr, txt, cls) {
+    var td = document.createElement("td");
+    if (txt !== undefined && txt !== null) td.textContent = txt;
+    if (cls) td.className = cls;
+    tr.appendChild(td);
+    return td;
+  }
+
+  function renderRow(r) {
+    if (tbody.querySelector("td[colspan]")) tbody.innerHTML = "";
+    var tr = document.createElement("tr");
+    if (r.decision === "guardrail") tr.className = "r-guard";
+    else if (r.converged) tr.className = "r-conv";
+    else if (r.phase === "hold") tr.className = "r-hold";
+
+    cell(tr, String(r.batch));
+    cell(tr, fe(r.mean_err), r.mean_err >= 0 ? "pos" : "neg");
+    cell(tr, fx(r.sigma, 4));
+    cell(tr, fx(r.cpk, 3), r.cpk >= P.CPK_TARGET ? "" : "neg");
+    cell(tr, String(r.oot), r.oot > 0 ? "neg" : "");
+    cell(tr, fe(r.compensation, 4));
+    cell(tr, (r.step >= 0 ? "+" : "") + r.step.toFixed(4) + (r.decision === "guardrail" ? " ✗" : ""));
+
+    // 备注
+    var td = document.createElement("td");
+    var tags = [];
+    if (r.decision === "guardrail") tags.push(["护栏拦截", "t-guard"]);
+    else if (r.clipped) tags.push(["速率截断", "t-clip"]);
+    if (P.STEP_SHIFT_BATCH !== null && r.batch === P.STEP_SHIFT_BATCH) tags.push(["换刀阶跃", "t-step"]);
+    if (r.converged) tags.push(["✅ 收敛", "t-conv"]);
+    else if (r.phase === "hold") tags.push(["保持赛", "t-hold"]);
+    if (tags.length === 0) {
+      td.innerHTML = '<span class="tag">—</span>';
+    } else {
+      tags.forEach(function (tg) {
+        var sp = document.createElement("span");
+        sp.className = "tag " + tg[1]; sp.textContent = tg[0];
+        td.appendChild(sp);
+        td.appendChild(document.createTextNode(" "));
+      });
+    }
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    var wrap = $("tableWrap");
+    wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  /* ---------------- 指标 / 成绩 ---------------- */
+  function setStat(id, txt, cls) {
+    var b = $(id);
+    b.textContent = txt;
+    b.className = cls || "";
+  }
+
+  function renderStats(r) {
+    var sim = S.run.sim;
+    setStat("sBatch", String(sim.batchIndex), "");
+    if (!r) {
+      ["sE", "sSigma", "sCpk", "sOot", "sComp", "sPending", "sTotOot", "sGuard", "sAdj"].forEach(function (id) {
+        setStat(id, "—", "dim");
+      });
+      return;
+    }
+    setStat("sE", fe(r.mean_err), Math.abs(r.mean_err) > P.TOL ? "bad" : "");
+    setStat("sSigma", fx(r.sigma, 4), "");
+    setStat("sCpk", fx(r.cpk, 2), r.cpk >= P.CPK_TARGET ? "good" : "bad");
+    setStat("sOot", String(r.oot), r.oot > 0 ? "bad" : "good");
+    setStat("sComp", fe(r.compensation, 4), "");
+    setStat("sPending", fe(sim.pending, 4), Math.abs(sim.pending) > 1e-9 ? "warn" : "dim");
+    setStat("sTotOot", String(sim.totalOot()), sim.totalOot() > 0 ? "bad" : "good");
+    setStat("sGuard", String(sim.guardrailHits), sim.guardrailHits > 0 ? "warn" : "dim");
+    setStat("sAdj", String(sim.adjustCount), "");
+  }
+
+  function renderScore() {
+    var el = $("scoreLine"), sub = $("scoreSub");
+    var run = S.run;
+    if (!run || S.recs.length === 0) {
+      el.className = "idle";
+      el.textContent = "尚未开跑 —— 点「自动运行闭环」";
+      sub.textContent = "";
+      return;
+    }
+    if (!run.finished) {
+      el.className = "";
+      var phase = run.convBatch ? ("保持赛中（已跑 " + run.holdCpk.length + " / " + P.HOLD_BATCHES + " 批）")
+                                : "运行中";
+      var holdNow = "—";
+      if (run.holdCpk.length) {
+        var hs = 0;
+        for (var hi = 0; hi < run.holdCpk.length; hi++) hs += run.holdCpk[hi];
+        holdNow = fx(hs / run.holdCpk.length, 2);
+      }
+      el.innerHTML = '第 <b>' + (run.convBatch || "—") + '</b> 批收敛 | 保持期 CPK 均值 <b>' +
+        holdNow + '</b> | 全程超差 <b>' + run.sim.totalOot() + '</b> 件' +
+        '<span class="verdict v-run">' + phase + '</span>';
+      sub.textContent = "判定口径：最近 30 件窗口、CPK 连续 " + P.CONSEC_PASS + " 批 ≥ " + P.CPK_TARGET + "；收敛后再跑 " + P.HOLD_BATCHES + " 批保持赛。";
+      return;
+    }
+    // 完赛
+    if (!run.ok) {
+      el.className = "bad";
+      el.innerHTML = '未收敛（' + P.MAX_BATCHES + ' 批内未达到连续 ' + P.CONSEC_PASS +
+        ' 批 CPK ≥ ' + P.CPK_TARGET + '）<span class="verdict v-bad">未收敛</span>';
+      sub.textContent = "全程超差 " + run.sim.totalOot() + " 件 · 护栏拦截 " +
+        run.sim.guardrailHits + " 次 · 调整 " + run.sim.adjustCount + " 次 —— 建议减小增益或加大死区后重跑。";
+      return;
+    }
+    el.className = "ok";
+    el.innerHTML = '第 ' + run.convBatch + ' 批收敛 | 保持期 CPK 均值 ' + fx(run.holdMean, 2) +
+      ' | 全程超差 ' + run.sim.totalOot() + ' 件<span class="verdict v-ok">完赛</span>';
+    var extra = "调整 " + run.sim.adjustCount + " 次 · 护栏拦截 " + run.sim.guardrailHits +
+      " 次 · 保持赛 " + run.holdCpk.length + " 批";
+    if (run.holdTruncated) extra += "（被 " + P.MAX_BATCHES + " 批上限截断）";
+    sub.textContent = extra;
+  }
+
+  function renderProgress() {
+    var sim = S.run.sim;
+    var pct = Math.min(100, sim.batchIndex / P.MAX_BATCHES * 100);
+    var bar = $("progBar");
+    bar.className = "prog";
+    if (S.run.finished) bar.className = "prog " + (S.run.ok ? "done" : "fail");
+    bar.firstElementChild.style.width = pct + "%";
+    $("progText").textContent = "第 " + sim.batchIndex + " / " + P.MAX_BATCHES + " 批";
+    var ph;
+    if (!S.recs.length) ph = "待运行";
+    else if (S.run.finished) ph = S.run.ok ? "完赛 · 已收敛" : "完赛 · 未收敛";
+    else if (S.run.convBatch) ph = "保持赛 " + S.run.holdCpk.length + "/" + P.HOLD_BATCHES;
+    else if (S.running) ph = "闭环运行中";
+    else ph = "已暂停";
+    $("phaseText").textContent = ph;
+  }
+
+  /* ---------------- 主推进 ---------------- */
+  function applyOne() {
+    var rec = S.run.step();
+    if (rec) {
+      S.recs.push(rec);
+      renderRow(rec);
+      renderStats(rec);
+    }
+    renderScore();
+    renderProgress();
+    drawScatter();
+    drawTrends();
+    if (S.run.finished) stopTimer(true);
+    return !!rec;
+  }
+
+  function makeRun() {
+    S.run = new LoopRun(S.dz, S.gain, S.seed);
+    S.recs = [];
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#a3b1c4;padding:22px 0;font-family:inherit">暂无数据</td></tr>';
+  }
+
+  function resetAll() {
+    stopTimer(false);
+    S.running = false;
+    readInputs();
+    makeRun();
+    renderScore();
+    renderStats(null);
+    renderProgress();
+    drawScatter();
+    drawTrends();
+    syncButtons();
+  }
+
+  function stopTimer(finished) {
+    if (S.timer) { clearInterval(S.timer); S.timer = null; }
+    S.running = false;
+    syncButtons();
+  }
+
+  function autoTick() {
+    var more = applyOne();
+    if (!more || S.run.finished) stopTimer(true);
+  }
+
+  function startRun() {
+    if (S.run.finished) resetAll();       // 完赛后点运行 = 重开一局
+    if (!S.timer) {
+      S.running = true;
+      S.timer = setInterval(autoTick, S.speed);
+      syncButtons();
+      renderProgress();
+    }
+  }
+
+  function syncButtons() {
+    var done = S.run ? S.run.finished : false;
+    $("btnRun").disabled = S.running;
+    $("btnRun").textContent = done ? "▶ 重新开始闭环" : (S.recs.length && !S.running ? "▶ 继续运行" : "▶ 自动运行闭环");
+    $("btnPause").disabled = !S.running;
+    $("btnStep").disabled = S.running || done;
+    $("ctrlHint").textContent = "种子 " + S.seed + " · 死区 " + S.dz + " · 增益 " + S.gain;
+  }
+
+  /* ---------------- 输入 ---------------- */
+  function readInputs() {
+    var dz = parseFloat($("inDz").value);
+    var gain = parseFloat($("inGain").value);
+    var seed = parseInt($("inSeed").value, 10);
+    S.dz = isFinite(dz) ? dz : 0.001;
+    S.gain = isFinite(gain) ? gain : 1.0;
+    S.seed = isFinite(seed) ? seed : 8;
+    S.speed = parseInt($("inSpeed").value, 10) || 320;
+  }
+
+  ["inDz", "inGain", "inSeed"].forEach(function (id) {
+    $(id).addEventListener("change", function () { resetAll(); });
+  });
+  $("inSpeed").addEventListener("change", function () {
+    readInputs();
+    if (S.running) { stopTimer(false); S.timer = setInterval(autoTick, S.speed); S.running = true; syncButtons(); }
+  });
+
+  $("btnRun").addEventListener("click", startRun);
+  $("btnPause").addEventListener("click", function () { stopTimer(false); renderProgress(); });
+  $("btnStep").addEventListener("click", function () { stopTimer(false); applyOne(); });
+  $("btnReset").addEventListener("click", resetAll);
+
+  /* ---------------- 参数核对表 ---------------- */
+  (function buildParamTable() {
+    var rows = [
+      ["目标尺寸 TARGET", P.TARGET.toFixed(3) + " mm"],
+      ["公差半宽 TOL", "±" + P.TOL.toFixed(3) + " mm"],
+      ["每批件数 BATCH_SIZE", P.BATCH_SIZE + " 件"],
+      ["赛程上限 MAX_BATCHES", P.MAX_BATCHES + " 批"],
+      ["测量噪声 NOISE_SIGMA", P.NOISE_SIGMA.toFixed(4) + " mm"],
+      ["刀具磨损 WEAR_PER_PART", "(" + P.WEAR_PER_PART[0] + ", " + P.WEAR_PER_PART[1] + ") mm/件"],
+      ["温度漂移 TEMP_PER_PART", "(" + P.TEMP_PER_PART[0] + ", " + P.TEMP_PER_PART[1] + ") mm/件"],
+      ["初始磨损 INITIAL_WEAR", P.INITIAL_WEAR.toFixed(3) + " mm"],
+      ["换刀阶跃 STEP_SHIFT_BATCH", P.STEP_SHIFT_BATCH === null ? "null（不启用）" : "第 " + P.STEP_SHIFT_BATCH + " 批"],
+      ["阶跃量 STEP_SHIFT_MM", P.STEP_SHIFT_MM.toFixed(3) + " mm"],
+      ["速率限制 RATE_LIMIT", "±" + P.RATE_LIMIT.toFixed(3) + " mm/批"],
+      ["安全护栏 GUARDRAIL", "±" + P.GUARDRAIL.toFixed(3) + " mm/步"],
+      ["行程上限 COMP_CAP", "±" + P.COMP_CAP.toFixed(3) + " mm"],
+      ["执行延迟 ACT_DELAY", P.ACT_DELAY + " 批"],
+      ["统计窗口 STATS_WINDOW", P.STATS_WINDOW + " 件"],
+      ["收敛阈值 CPK_TARGET", P.CPK_TARGET.toFixed(2)],
+      ["连续达标 CONSEC_PASS", P.CONSEC_PASS + " 批"],
+      ["保持赛 HOLD_BATCHES", P.HOLD_BATCHES + " 批"],
+      ["策略", "|e| < 死区不调整；否则补偿 = −e × 增益"],
+      ["随机数发生器", "MT19937 + init_by_array（与 CPython 位级一致）"]
+    ];
+    var box = $("pgrid");
+    rows.forEach(function (r) {
+      var d = document.createElement("div");
+      var s = document.createElement("span"); s.textContent = r[0];
+      var c = document.createElement("code"); c.textContent = r[1];
+      d.appendChild(s); d.appendChild(c);
+      box.appendChild(d);
+    });
+    var scriptLabel = "剧本：标准产线";
+    if (P.STEP_SHIFT_BATCH !== null) {
+      scriptLabel = "剧本：第 " + P.STEP_SHIFT_BATCH + " 批换刀 +" + P.STEP_SHIFT_MM.toFixed(3);
+    } else if (Math.abs(P.WEAR_PER_PART[0] - 0.0001) > 1e-9) {
+      scriptLabel = "剧本：A 组 磨损×1.1";
+    } else if (Math.abs(P.NOISE_SIGMA - 0.0035) > 1e-9) {
+      scriptLabel = "剧本：B 组 噪声 σ=" + P.NOISE_SIGMA.toFixed(3);
+    }
+    $("chipScript").textContent = scriptLabel;
+  })();
+
+  /* ---------------- 启动 ---------------- */
+  var rzTimer = null;
+  window.addEventListener("resize", function () {
+    if (rzTimer) clearTimeout(rzTimer);
+    rzTimer = setTimeout(function () { drawScatter(); drawTrends(); }, 120);
+  });
+
+  readInputs();
+  resetAll();
+
+  // 便于第三关扩展：把参数与运行器挂到 window
+  window.PARAMS = PARAMS;
+  window.getRun = function () { return S.run; };
+  window.runFast = function (dz, gain, seed) {
+    return new LoopRun(dz, gain, seed).runAll();
+  };
+})();
+</script>
+</body>
+</html>

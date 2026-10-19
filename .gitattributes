@@ -1,0 +1,8 @@
+# 统一换行符处理，避免 Windows / Linux 之间整文件 diff
+* text=auto
+
+# HTML 是单文件应用，按文本处理即可
+*.html text
+*.md   text
+*.py   text
+*.txt  text

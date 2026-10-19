@@ -1,0 +1,81 @@
+# ============================================================
+# 产线闭环仿真 · 忽略规则
+# ============================================================
+
+# ---------- Python 运行缓存（跑 agent_loop.py 会生成） ----------
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# ---------- 操作系统 / 编辑器 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+~$*
+*.lnk
+
+# ---------- 临时文件 / 个人草稿 ----------
+*.tmp
+*.bak
+*.orig
+*.rej
+_*.js
+_*.py
+_*.json
+_*.html
+
+# ---------- 密钥 / 凭据：一律不要提交 ----------
+# 通用密钥文件
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+secrets.json
+secrets.yaml
+secrets.yml
+credentials.json
+*.token
+.credentials*
+
+# 名字里带 api key / secret / token 的配置文件
+*api_key*
+*api-key*
+*apikey*
+*secret*
+*token*.json
+
+# 各家工具/云的本地凭据目录
+.npmrc
+.pypirc
+.netrc
+.aws/
+.gcloud/
+.azure/
+.ssh/
+.docker/config.json
+
+# 本机可能用到的模型/服务密钥（有就忽略）
+*openai*
+*minimax*
+*agnes*
+key.txt
+keys.txt
+
+# ---------- 可选：只公开自己的产出（去掉下面注释即可隐藏赛方材料） ----------
+# 学生任务书.md
+# 档案卡_A组.md
+# 档案卡_B组.md
+# 档案卡_C组.md
+# AI参谋记录表.md
